@@ -528,9 +528,25 @@ private struct Renderer {
             case let .compareUUID(l, r, outI):
                 out.append("\(ind)if let u1 = UUID(uuidString: \(l)), let u2 = UUID(uuidString: \(r)) { \(outI) = (u1 == u2) ? 1 : 0 } else { \(outI) = 0 }")
             case let .setDateNowString(name):
-                out.append("\(ind)do { let df = ISO8601DateFormatter(); \(name) = df.string(from: Date()) }")
+                out.append("\(ind)do {")
+                out.append("\(ind)    let df = ISO8601DateFormatter()")
+                out.append("\(ind)    \(name) = df.string(from: Date())")
+                out.append("\(ind)}")
             case let .compareDateStrings(l, r, outI):
-                out.append("\(ind)do { let df = ISO8601DateFormatter(); if let d1 = df.date(from: \(l)), let d2 = df.date(from: \(r)) { if d1 < d2 { \(outI) = -1 } else if d1 > d2 { \(outI) = 1 } else { \(outI) = 0 } } else { \(outI) = 0 } }")
+                out.append("\(ind)do {")
+                out.append("\(ind)    let df = ISO8601DateFormatter()")
+                out.append("\(ind)    if let d1 = df.date(from: \(l)), let d2 = df.date(from: \(r)) {")
+                out.append("\(ind)        if d1 < d2 {")
+                out.append("\(ind)            \(outI) = -1")
+                out.append("\(ind)        } else if d1 > d2 {")
+                out.append("\(ind)            \(outI) = 1")
+                out.append("\(ind)        } else {")
+                out.append("\(ind)            \(outI) = 0")
+                out.append("\(ind)        }")
+                out.append("\(ind)    } else {")
+                out.append("\(ind)        \(outI) = 0")
+                out.append("\(ind)    }")
+                out.append("\(ind)}")
             // --- массив/словарь ---
             case let .arrayAppend(v):
                 out.append("\(ind)\(pools.arr).append(\(v))")
