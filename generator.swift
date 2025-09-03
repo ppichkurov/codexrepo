@@ -250,68 +250,75 @@ private struct Generator {
         }
     }
 
+    mutating func makeNestedInstruction(budget: inout InstructionBudget, depth: Int, maxConsecutiveFlat: Int) -> Instruction? {
+        guard budget.consume() else { return nil }
+        let choice = rng.nextInt(in: 0...6)
+        switch choice {
+        case 0:
+            let v = pickIntVar()
+            let thenBody = makeBlock(budget: &budget, depth: depth + 1, maxConsecutiveFlat: maxConsecutiveFlat)
+            let elseBody: [Instruction] = (rng.nextBool(probabilityTrue: 50) && budget.remaining > 0)
+                ? makeBlock(budget: &budget, depth: depth + 1, maxConsecutiveFlat: maxConsecutiveFlat)
+                : []
+            return .ifPositive(varName: v, then: thenBody, else: elseBody)
+        case 1:
+            let v = pickIntVar()
+            let thenBody = makeBlock(budget: &budget, depth: depth + 1, maxConsecutiveFlat: maxConsecutiveFlat)
+            let elseBody = makeBlock(budget: &budget, depth: depth + 1, maxConsecutiveFlat: maxConsecutiveFlat)
+            return .ifEqualsZero(varName: v, then: thenBody, else: elseBody)
+        case 2:
+            let t = pickIntVar()
+            let body = makeBlock(budget: &budget, depth: depth + 1, maxConsecutiveFlat: maxConsecutiveFlat)
+            return .loop(timesVar: t, body: body)
+        case 3:
+            let v = pickIntVar()
+            let body = makeBlock(budget: &budget, depth: depth + 1, maxConsecutiveFlat: maxConsecutiveFlat)
+            return .whileDecrementing(varName: v, body: body)
+        case 4:
+            let v = pickIntVar()
+            let c0 = makeBlock(budget: &budget, depth: depth + 1, maxConsecutiveFlat: maxConsecutiveFlat)
+            let c1 = makeBlock(budget: &budget, depth: depth + 1, maxConsecutiveFlat: maxConsecutiveFlat)
+            let c2 = makeBlock(budget: &budget, depth: depth + 1, maxConsecutiveFlat: maxConsecutiveFlat)
+            return .switchMod3(varName: v, case0: c0, case1: c1, case2: c2)
+        case 5:
+            let v = pickIntVar()
+            let g = pickIntVar()
+            let body = makeBlock(budget: &budget, depth: depth + 1, maxConsecutiveFlat: maxConsecutiveFlat)
+            return .repeatDecrement(varName: v, guardVar: g, body: body)
+        default:
+            let v = pickIntVar()
+            let s = makeBlock(budget: &budget, depth: depth + 1, maxConsecutiveFlat: maxConsecutiveFlat)
+            let m = makeBlock(budget: &budget, depth: depth + 1, maxConsecutiveFlat: maxConsecutiveFlat)
+            let l = makeBlock(budget: &budget, depth: depth + 1, maxConsecutiveFlat: maxConsecutiveFlat)
+            let o = makeBlock(budget: &budget, depth: depth + 1, maxConsecutiveFlat: maxConsecutiveFlat)
+            return .switchBucket100(varName: v, small: s, medium: m, large: l, other: o)
+        }
+    }
+
     mutating func makeBlock(budget: inout InstructionBudget, depth: Int, maxConsecutiveFlat: Int) -> [Instruction] {
         var block: [Instruction] = []
-        let need = max(1, min(maxConsecutiveFlat, budget.remaining))
-        let flatCount = min(rng.nextInt(in: 1...need), budget.remaining)
-        for _ in 0..<flatCount {
-            guard let ins = makeFlatInstruction(budget: &budget) else { return block }
-            block.append(ins)
-        }
-
-        // Больше и глубже вложенности: за один проход можем добавить 1-3 сложных конструкции
-        if depth < maxDepth, budget.remaining > 0, rng.nextBool(probabilityTrue: 70) {
-            let nestedCount = min(rng.nextInt(in: 1...3), budget.remaining)
-            for _ in 0..<nestedCount {
-                let choice = rng.nextInt(in: 0...6)
-                switch choice {
-                case 0:
-                    guard budget.consume() else { return block }
-                    let v = pickIntVar()
-                    let thenBody = makeBlock(budget: &budget, depth: depth + 1, maxConsecutiveFlat: maxConsecutiveFlat)
-                    let elseBody: [Instruction] = (rng.nextBool(probabilityTrue: 50) && budget.remaining > 0)
-                        ? makeBlock(budget: &budget, depth: depth + 1, maxConsecutiveFlat: maxConsecutiveFlat)
-                        : []
-                    block.append(.ifPositive(varName: v, then: thenBody, else: elseBody))
-                case 1:
-                    guard budget.consume() else { return block }
-                    let v = pickIntVar()
-                    let thenBody = makeBlock(budget: &budget, depth: depth + 1, maxConsecutiveFlat: maxConsecutiveFlat)
-                    let elseBody = makeBlock(budget: &budget, depth: depth + 1, maxConsecutiveFlat: maxConsecutiveFlat)
-                    block.append(.ifEqualsZero(varName: v, then: thenBody, else: elseBody))
-                case 2:
-                    guard budget.consume() else { return block }
-                    let t = pickIntVar()
-                    let body = makeBlock(budget: &budget, depth: depth + 1, maxConsecutiveFlat: maxConsecutiveFlat)
-                    block.append(.loop(timesVar: t, body: body))
-                case 3:
-                    guard budget.consume() else { return block }
-                    let v = pickIntVar()
-                    let body = makeBlock(budget: &budget, depth: depth + 1, maxConsecutiveFlat: maxConsecutiveFlat)
-                    block.append(.whileDecrementing(varName: v, body: body))
-                case 4:
-                    guard budget.consume() else { return block }
-                    let v = pickIntVar()
-                    let c0 = makeBlock(budget: &budget, depth: depth + 1, maxConsecutiveFlat: maxConsecutiveFlat)
-                    let c1 = makeBlock(budget: &budget, depth: depth + 1, maxConsecutiveFlat: maxConsecutiveFlat)
-                    let c2 = makeBlock(budget: &budget, depth: depth + 1, maxConsecutiveFlat: maxConsecutiveFlat)
-                    block.append(.switchMod3(varName: v, case0: c0, case1: c1, case2: c2))
-                case 5:
-                    guard budget.consume() else { return block }
-                    let v = pickIntVar()
-                    let g = pickIntVar()
-                    let body = makeBlock(budget: &budget, depth: depth + 1, maxConsecutiveFlat: maxConsecutiveFlat)
-                    block.append(.repeatDecrement(varName: v, guardVar: g, body: body))
-                default:
-                    guard budget.consume() else { return block }
-                    let v = pickIntVar()
-                    let s = makeBlock(budget: &budget, depth: depth + 1, maxConsecutiveFlat: maxConsecutiveFlat)
-                    let m = makeBlock(budget: &budget, depth: depth + 1, maxConsecutiveFlat: maxConsecutiveFlat)
-                    let l = makeBlock(budget: &budget, depth: depth + 1, maxConsecutiveFlat: maxConsecutiveFlat)
-                    let o = makeBlock(budget: &budget, depth: depth + 1, maxConsecutiveFlat: maxConsecutiveFlat)
-                    block.append(.switchBucket100(varName: v, small: s, medium: m, large: l, other: o))
-                }
+        var flatRun = 0
+        while budget.remaining > 0 {
+            let shouldNest: Bool
+            if depth >= maxDepth {
+                shouldNest = false
+            } else if flatRun >= maxConsecutiveFlat {
+                shouldNest = true
+            } else {
+                shouldNest = rng.nextBool(probabilityTrue: 40)
             }
+
+            if shouldNest, let nested = makeNestedInstruction(budget: &budget, depth: depth, maxConsecutiveFlat: maxConsecutiveFlat) {
+                block.append(nested)
+                flatRun = 0
+            } else if let ins = makeFlatInstruction(budget: &budget) {
+                block.append(ins)
+                flatRun += 1
+            } else {
+                break
+            }
+
+            if depth == 0 && rng.nextBool(probabilityTrue: 15) { break }
         }
         return block
     }
@@ -521,10 +528,9 @@ private struct Renderer {
             case let .compareUUID(l, r, outI):
                 out.append("\(ind)if let u1 = UUID(uuidString: \(l)), let u2 = UUID(uuidString: \(r)) { \(outI) = (u1 == u2) ? 1 : 0 } else { \(outI) = 0 }")
             case let .setDateNowString(name):
-                out.append("\(ind){ let df = ISO8601DateFormatter(); \(name) = df.string(from: Date()) }")
+                out.append("\(ind)do { let df = ISO8601DateFormatter(); \(name) = df.string(from: Date()) }")
             case let .compareDateStrings(l, r, outI):
-                out.append("\(ind){ let df = ISO8601DateFormatter(); if let d1 = df.date(from: \(l)), let d2 = df.date(from: \(r)) { if d1 < d2 { \(outI) = -1 } else if d1 > d2 { \(outI) = 1 } else { \(outI) = 0 } } else { \(outI) = 0 } }")
-
+                out.append("\(ind)do { let df = ISO8601DateFormatter(); if let d1 = df.date(from: \(l)), let d2 = df.date(from: \(r)) { if d1 < d2 { \(outI) = -1 } else if d1 > d2 { \(outI) = 1 } else { \(outI) = 0 } } else { \(outI) = 0 } }")
             // --- массив/словарь ---
             case let .arrayAppend(v):
                 out.append("\(ind)\(pools.arr).append(\(v))")
@@ -698,7 +704,7 @@ public enum FakeCallsGenerator {
     public static func render(
         seedToken: String,
         maxInstructions: Int,
-        maxDepth: Int = 4,                  // немного увеличили глубину по умолчанию
+        maxDepth: Int = 5,                  // увеличили глубину по умолчанию
         maxConsecutiveFlat: Int = 4,
         module: String,
         parentContainer: String,
@@ -719,13 +725,7 @@ public enum FakeCallsGenerator {
 
         var gen = Generator(rng: SplitMix64(seed: fnv1a64(seedToken)), maxDepth: maxDepth, pools: pools)
         var budget = InstructionBudget(remaining: max(1, maxInstructions))
-        var program: [Instruction] = []
-
-        while budget.remaining > 0 {
-            let chunk = gen.makeBlock(budget: &budget, depth: 0, maxConsecutiveFlat: max(1, maxConsecutiveFlat))
-            program.append(contentsOf: chunk)
-            if budget.remaining == 0 || gen.rng.nextBool(probabilityTrue: 20) { break }
-        }
+        let program = gen.makeBlock(budget: &budget, depth: 0, maxConsecutiveFlat: max(1, maxConsecutiveFlat))
 
         var renderer = Renderer(nameFactory: factory, pools: pools)
         let meta = "maxInstructions=\(maxInstructions), maxDepth=\(maxDepth), maxConsecutiveFlat=\(maxConsecutiveFlat)"
