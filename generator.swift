@@ -84,6 +84,9 @@ private enum Instruction {
     case cmpEq(lhs: String, rhs: String, out: String)
     case cmpLT(lhs: String, rhs: String, out: String)
     case cmpGT(lhs: String, rhs: String, out: String)
+    case popCount(name: String, out: String)             // NEW: population count
+    case leadingZeros(name: String, out: String)         // NEW: leading zero bit count
+    case byteSwap(name: String)                          // NEW: byte swap
 
     // вызовы через протокол/динамическую диспетчеризацию
     case opApply(lhs: String, rhs: String, selector: String, out: String) // NEW
@@ -161,7 +164,7 @@ private struct Generator {
 
     mutating func makeFlatInstruction(budget: inout InstructionBudget) -> Instruction? {
         guard budget.consume() else { return nil }
-        switch rng.nextInt(in: 0...60) { // расширили диапазон
+        switch rng.nextInt(in: 0...63) { // расширили диапазон
         // --- числа (старые) ---
         case 0:  return .setInt(name: pickIntVar(), value: rng.nextInt(in: -9...9))
         case 1:  return .add(lhs: pickIntVar(), rhs: pickIntVar(), out: pickIntVar())
@@ -232,8 +235,9 @@ private struct Generator {
         // --- разные ---
         case 56: return .applyClosureAddCap(capture: pickIntVar(), target: pickIntVar())
         case 57: return .tryMix(name: pickIntVar(), out: pickIntVar())
-        case 58: return .nop
-        case 59: return .nop
+        case 58: return .popCount(name: pickIntVar(), out: pickIntVar())
+        case 59: return .leadingZeros(name: pickIntVar(), out: pickIntVar())
+        case 60: return .byteSwap(name: pickIntVar())
         default: return .nop
         }
     }
@@ -460,6 +464,12 @@ private struct Renderer {
                 out.append("\(ind)\(o) = (\(l) < \(r)) ? 1 : 0")
             case let .cmpGT(l, r, o):
                 out.append("\(ind)\(o) = (\(l) > \(r)) ? 1 : 0")
+            case let .popCount(v, o):
+                out.append("\(ind)\(o) = \(v).nonzeroBitCount")
+            case let .leadingZeros(v, o):
+                out.append("\(ind)\(o) = \(v).leadingZeroBitCount")
+            case let .byteSwap(v):
+                out.append("\(ind)\(v) = \(v).byteSwapped")
 
             case let .opApply(l, r, sel, o):
                 let opVar = nameFactory.make("tmpop")
@@ -531,7 +541,7 @@ private struct Renderer {
                 out.append("\(ind)}")
             case .arrayPrefixSum:
                 let acc = nameFactory.make("tmpacc")
-                out.append("\(ind){ var \(acc) = 0; \(pools.arr) = \(pools.arr).map { \(acc) &+= $0; return \(acc) } }")
+                out.append("\(ind)do { var \(acc) = 0; \(pools.arr) = \(pools.arr).map { \(acc) &+= $0; return \(acc) } }")
 
             case let .dictSet(k, v):
                 out.append("\(ind)\(pools.dict)[\(k)] = \(v)")
