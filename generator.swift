@@ -87,6 +87,10 @@ private enum Instruction {
     case popCount(name: String, out: String)             // NEW: population count
     case leadingZeros(name: String, out: String)         // NEW: leading zero bit count
     case byteSwap(name: String)                          // NEW: byte swap
+    case setUUIDString(name: String)                     // NEW: generate UUID string
+    case compareUUID(lhs: String, rhs: String, outInt: String) // NEW: compare UUID strings
+    case setDateNowString(name: String)                  // NEW: current ISO8601 date string
+    case compareDateStrings(lhs: String, rhs: String, outInt: String) // NEW: compare parsed dates
 
     // вызовы через протокол/динамическую диспетчеризацию
     case opApply(lhs: String, rhs: String, selector: String, out: String) // NEW
@@ -164,7 +168,7 @@ private struct Generator {
 
     mutating func makeFlatInstruction(budget: inout InstructionBudget) -> Instruction? {
         guard budget.consume() else { return nil }
-        switch rng.nextInt(in: 0...63) { // расширили диапазон
+        switch rng.nextInt(in: 0...67) { // расширили диапазон
         // --- числа (старые) ---
         case 0:  return .setInt(name: pickIntVar(), value: rng.nextInt(in: -9...9))
         case 1:  return .add(lhs: pickIntVar(), rhs: pickIntVar(), out: pickIntVar())
@@ -238,6 +242,10 @@ private struct Generator {
         case 58: return .popCount(name: pickIntVar(), out: pickIntVar())
         case 59: return .leadingZeros(name: pickIntVar(), out: pickIntVar())
         case 60: return .byteSwap(name: pickIntVar())
+        case 61: return .setUUIDString(name: pickStringVar())
+        case 62: return .compareUUID(lhs: pickStringVar(), rhs: pickStringVar(), outInt: pickIntVar())
+        case 63: return .setDateNowString(name: pickStringVar())
+        case 64: return .compareDateStrings(lhs: pickStringVar(), rhs: pickStringVar(), outInt: pickIntVar())
         default: return .nop
         }
     }
@@ -328,6 +336,7 @@ private struct Renderer {
         var out: [String] = []
         out.append("// === RandomProgram generated ===")
         out.append("// seedToken: \"\(seedToken)\" | \(meta)")
+        out.append("import Foundation")
 
         // Подготовим уникальные имена helper-ов
         let uniq = nameFactory.make("h")
@@ -507,6 +516,14 @@ private struct Renderer {
                 out.append("\(ind)\(outI) = \(s).hasPrefix(\(pref)) ? 1 : 0")
             case let .hasSuffixVar(s, suff, outI):
                 out.append("\(ind)\(outI) = \(s).hasSuffix(\(suff)) ? 1 : 0")
+            case let .setUUIDString(name):
+                out.append("\(ind)\(name) = UUID().uuidString")
+            case let .compareUUID(l, r, outI):
+                out.append("\(ind)if let u1 = UUID(uuidString: \(l)), let u2 = UUID(uuidString: \(r)) { \(outI) = (u1 == u2) ? 1 : 0 } else { \(outI) = 0 }")
+            case let .setDateNowString(name):
+                out.append("\(ind){ let df = ISO8601DateFormatter(); \(name) = df.string(from: Date()) }")
+            case let .compareDateStrings(l, r, outI):
+                out.append("\(ind){ let df = ISO8601DateFormatter(); if let d1 = df.date(from: \(l)), let d2 = df.date(from: \(r)) { if d1 < d2 { \(outI) = -1 } else if d1 > d2 { \(outI) = 1 } else { \(outI) = 0 } } else { \(outI) = 0 } }")
 
             // --- массив/словарь ---
             case let .arrayAppend(v):
