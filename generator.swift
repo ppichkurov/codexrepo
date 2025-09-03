@@ -531,7 +531,6 @@ private struct Renderer {
                 out.append("\(ind)do { let df = ISO8601DateFormatter(); \(name) = df.string(from: Date()) }")
             case let .compareDateStrings(l, r, outI):
                 out.append("\(ind)do { let df = ISO8601DateFormatter(); if let d1 = df.date(from: \(l)), let d2 = df.date(from: \(r)) { if d1 < d2 { \(outI) = -1 } else if d1 > d2 { \(outI) = 1 } else { \(outI) = 0 } } else { \(outI) = 0 } }")
-
             // --- массив/словарь ---
             case let .arrayAppend(v):
                 out.append("\(ind)\(pools.arr).append(\(v))")
