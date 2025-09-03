@@ -84,6 +84,13 @@ private enum Instruction {
     case cmpEq(lhs: String, rhs: String, out: String)
     case cmpLT(lhs: String, rhs: String, out: String)
     case cmpGT(lhs: String, rhs: String, out: String)
+    case popCount(name: String, out: String)             // NEW: population count
+    case leadingZeros(name: String, out: String)         // NEW: leading zero bit count
+    case byteSwap(name: String)                          // NEW: byte swap
+    case setUUIDString(name: String)                     // NEW: generate UUID string
+    case compareUUID(lhs: String, rhs: String, outInt: String) // NEW: compare UUID strings
+    case setDateNowString(name: String)                  // NEW: current ISO8601 date string
+    case compareDateStrings(lhs: String, rhs: String, outInt: String) // NEW: compare parsed dates
 
     // вызовы через протокол/динамическую диспетчеризацию
     case opApply(lhs: String, rhs: String, selector: String, out: String) // NEW
@@ -161,7 +168,7 @@ private struct Generator {
 
     mutating func makeFlatInstruction(budget: inout InstructionBudget) -> Instruction? {
         guard budget.consume() else { return nil }
-        switch rng.nextInt(in: 0...60) { // расширили диапазон
+        switch rng.nextInt(in: 0...67) { // расширили диапазон
         // --- числа (старые) ---
         case 0:  return .setInt(name: pickIntVar(), value: rng.nextInt(in: -9...9))
         case 1:  return .add(lhs: pickIntVar(), rhs: pickIntVar(), out: pickIntVar())
@@ -232,8 +239,13 @@ private struct Generator {
         // --- разные ---
         case 56: return .applyClosureAddCap(capture: pickIntVar(), target: pickIntVar())
         case 57: return .tryMix(name: pickIntVar(), out: pickIntVar())
-        case 58: return .nop
-        case 59: return .nop
+        case 58: return .popCount(name: pickIntVar(), out: pickIntVar())
+        case 59: return .leadingZeros(name: pickIntVar(), out: pickIntVar())
+        case 60: return .byteSwap(name: pickIntVar())
+        case 61: return .setUUIDString(name: pickStringVar())
+        case 62: return .compareUUID(lhs: pickStringVar(), rhs: pickStringVar(), outInt: pickIntVar())
+        case 63: return .setDateNowString(name: pickStringVar())
+        case 64: return .compareDateStrings(lhs: pickStringVar(), rhs: pickStringVar(), outInt: pickIntVar())
         default: return .nop
         }
     }
@@ -324,6 +336,7 @@ private struct Renderer {
         var out: [String] = []
         out.append("// === RandomProgram generated ===")
         out.append("// seedToken: \"\(seedToken)\" | \(meta)")
+        out.append("import Foundation")
 
         // Подготовим уникальные имена helper-ов
         let uniq = nameFactory.make("h")
@@ -460,6 +473,12 @@ private struct Renderer {
                 out.append("\(ind)\(o) = (\(l) < \(r)) ? 1 : 0")
             case let .cmpGT(l, r, o):
                 out.append("\(ind)\(o) = (\(l) > \(r)) ? 1 : 0")
+            case let .popCount(v, o):
+                out.append("\(ind)\(o) = \(v).nonzeroBitCount")
+            case let .leadingZeros(v, o):
+                out.append("\(ind)\(o) = \(v).leadingZeroBitCount")
+            case let .byteSwap(v):
+                out.append("\(ind)\(v) = \(v).byteSwapped")
 
             case let .opApply(l, r, sel, o):
                 let opVar = nameFactory.make("tmpop")
@@ -497,6 +516,14 @@ private struct Renderer {
                 out.append("\(ind)\(outI) = \(s).hasPrefix(\(pref)) ? 1 : 0")
             case let .hasSuffixVar(s, suff, outI):
                 out.append("\(ind)\(outI) = \(s).hasSuffix(\(suff)) ? 1 : 0")
+            case let .setUUIDString(name):
+                out.append("\(ind)\(name) = UUID().uuidString")
+            case let .compareUUID(l, r, outI):
+                out.append("\(ind)if let u1 = UUID(uuidString: \(l)), let u2 = UUID(uuidString: \(r)) { \(outI) = (u1 == u2) ? 1 : 0 } else { \(outI) = 0 }")
+            case let .setDateNowString(name):
+                out.append("\(ind){ let df = ISO8601DateFormatter(); \(name) = df.string(from: Date()) }")
+            case let .compareDateStrings(l, r, outI):
+                out.append("\(ind){ let df = ISO8601DateFormatter(); if let d1 = df.date(from: \(l)), let d2 = df.date(from: \(r)) { if d1 < d2 { \(outI) = -1 } else if d1 > d2 { \(outI) = 1 } else { \(outI) = 0 } } else { \(outI) = 0 } }")
 
             // --- массив/словарь ---
             case let .arrayAppend(v):
@@ -531,7 +558,7 @@ private struct Renderer {
                 out.append("\(ind)}")
             case .arrayPrefixSum:
                 let acc = nameFactory.make("tmpacc")
-                out.append("\(ind){ var \(acc) = 0; \(pools.arr) = \(pools.arr).map { \(acc) &+= $0; return \(acc) } }")
+                out.append("\(ind)do { var \(acc) = 0; \(pools.arr) = \(pools.arr).map { \(acc) &+= $0; return \(acc) } }")
 
             case let .dictSet(k, v):
                 out.append("\(ind)\(pools.dict)[\(k)] = \(v)")
